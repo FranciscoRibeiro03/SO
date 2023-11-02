@@ -154,6 +154,8 @@ void patient_goto_urgency(int id)
 {
    new_patient(&hd->all_patients[id]);
    check_valid_name(hd->all_patients[id].name);
+   mutex_init(&hd->all_patients[id].patient_mutex, NULL);
+   cond_init(&hd->all_patients[id].patient_is_done, NULL);
    printf("\e[30;01mPatient %s (number %d): get to hospital\e[0m\n", hd->all_patients[id].name, id);
    insert_pfifo(&hd->triage_queue, id, 1); // all elements in triage queue with the same priority!
 }
@@ -177,6 +179,8 @@ void patient_life(int id)
    // nurse_iteration(0);  // TODO point: to be commented/deleted in concurrent version
    // doctor_iteration(0); // TODO point: to be commented/deleted in concurrent version
    patient_wait_end_of_consultation(id);
+   cond_destroy(&hd->all_patients[id].patient_is_done);
+   mutex_destroy(&hd->all_patients[id].patient_mutex);
    memset(&(hd->all_patients[id]), 0, sizeof(Patient)); // patient finished
 }
 
@@ -270,6 +274,13 @@ int main(int argc, char *argv[])
 
    /* end of dummy code */
 
+   pthread_t all_nurses[nnurses];
+   int nurse_ids[nnurses];
+   for (int i = 0; i < nnurses; i++)
+   {
+      nurse_ids[i] = i;
+      thread_create(&all_nurses[i], NULL, nurse_thread, (void*)&nurse_ids[i]);
+   }
    pthread_t all_patients[npatients];
    int patient_ids[npatients];
    for (int i = 0; i < npatients; i++)
@@ -283,13 +294,6 @@ int main(int argc, char *argv[])
    {
       doctor_ids[i] = i;
       thread_create(&all_doctors[i], NULL, doctor_thread, (void*)&doctor_ids[i]);
-   }
-   pthread_t all_nurses[nnurses];
-   int nurse_ids[nnurses];
-   for (int i = 0; i < nnurses; i++)
-   {
-      nurse_ids[i] = i;
-      thread_create(&all_nurses[i], NULL, nurse_thread, (void*)&nurse_ids[i]);
    }
 
    for (int i = 0; i < npatients; i++)
